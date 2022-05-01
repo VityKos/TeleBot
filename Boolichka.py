@@ -21,8 +21,9 @@ class TeleBoolichka:
         ans = self.GoogleApi.new_answers(0)
         if ans > 0:
             msg = f'\[ALERT] Форму на организаторов заполнили {ans} человек:\n\n\n'
+            self.GoogleApi.upload(0)
             for i in range(ans):
-                responce = self.GoogleApi.get_responce(0, i, True)
+                responce = self.GoogleApi.get_responce(i, True)
                 info = identify(responce, self.GoogleApi.FormsId[0])
                 msg += f'_{info["Время"]}_\n*{info["ФИО"]}*\n' \
                        f'*ВУЗ* - {info["ВУЗ"]}\n*Факультет* - {info["Факультет"]}\n*Курс* - {info["Курс"]}.\n' \

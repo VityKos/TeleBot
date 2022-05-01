@@ -3,7 +3,7 @@ from apiclient import discovery
 from httplib2 import Http
 from oauth2client import client, file, tools
 import pickle
-
+import json
 
 class GoogleFormsApi:
     def __init__(self):
@@ -27,18 +27,22 @@ class GoogleFormsApi:
         else:
             raise Exception('check_actual убился во времени')
 
-    def get_responce(self, local_form_id, num=0, way=True):
-        """возвращает один ответ из списка форм по счету, сначала или с конца T/F"""
-        result = self.service.forms().responses().list(formId=self.FormsId[local_form_id]).execute()
+    def upload(self, local_form_id=0):
+        result = self.service.forms().responses().list(formId=self.FormsId[local_form_id]).execute()  # HUETA
         result_relevant = []
         for state in result['responses']:
             if self.check_actual(self.string_to_time(state['createTime'])):
                 result_relevant.append(state)
         result_relevant = self.sort_answers_by_time(result_relevant)
+        with open('Uploaded.json', 'w') as f:
+            json.dump(result_relevant, f)
+
+    def get_responce(self, num=0, way=True):
+        """возвращает один ответ из списка форм по счету, сначала или с конца T/F"""
         if way:
-            return result_relevant[num]
+            return json.load('Uploaded.json', 'r')[num]
         else:
-            return result_relevant[::-1][num]
+            return json.load('Uploaded.json', 'r')[::-1][num]
 
     def get_responce_list(self, local_form_id):
         """возвращает список ответов из списка форм по счету, сначала или с конца T/F"""
