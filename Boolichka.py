@@ -1,7 +1,10 @@
 import telebot
+from telebot.apihelper import ApiTelegramException
 import pickle
 from threading import Thread
 from time import sleep
+
+# лучше удалит
 import schedule
 # тута пихать сообщения
 
@@ -17,14 +20,13 @@ class TeleBoolichka:
 
         ans = self.GoogleApi.new_answers(0)
         if ans > 0:
-            msg = f'Боже все сюда какой-то чувак заполнил форму и хочет умереть) ' \
-                  f'В форме получено ответов [{ans}]\n_________________________\n\n'
+            msg = f'\[ALERT] Форму на организаторов заполнили {ans} человек:\n\n\n'
             for i in range(ans):
-                responce = self.GoogleApi.get_responce(0, i, False)
+                responce = self.GoogleApi.get_responce(0, i, True)
                 info = identify(responce, self.GoogleApi.FormsId[0])
-                msg += f'"{info["ФИО"]}" заполнил{"а" if not info["Пол"] else ""} форму на организатора.\n' \
-                       f'ВУЗ - {info["ВУЗ"]}\nФакультет - {info["Факультет"]}\nКурс - {info["Курс"]}.\n' \
-                       f'ВК - {info["ВК"]}, Почта - {info["Почта"]}\n_________________________\n'
+                msg += f'_{info["Время"]}_\n*{info["ФИО"]}*\n' \
+                       f'*ВУЗ* - {info["ВУЗ"]}\n*Факультет* - {info["Факультет"]}\n*Курс* - {info["Курс"]}.\n' \
+                       f'*ВК* - {info["ВК"]}\n*Почта* - {info["Почта"]}\n\n'
             return msg  # Цикл работает
         else:
             return -1
@@ -32,11 +34,12 @@ class TeleBoolichka:
 
 def identify(responce, form_id=0) -> {str, str, str, bool, str, int, str, str}:
     """ Вставить один респонс человека, которого нужно определить и разобрать
-        возвращает то шо нада. [0 ФИО, 1 пол М/Ж T/F, 2 ВУЗ, 3 Факультет 4 КУРС, 5 почту, 6 вк"""
+        возвращает то шо нада. [0 ФИО, 1 пол М/Ж T/F, 2 ВУЗ, 3 Факультет 4 КУРС, 5 почту, 6 вк 7 время"""
 
     form_Q = pickle.load(open('FormsQuestions.pickle', 'rb'))[form_id]
+    person = {'Время': responce['createTime'][:-5].replace('T', ' ')}
     responce = responce['answers']
-    person = {}
+
     for key in form_Q.keys():
         if form_Q[key] in responce.keys():
             person[key] = responce[form_Q[key]]['textAnswers']['answers'][0]['value']
@@ -56,24 +59,33 @@ def run(Forms):
     botlogic = TeleBoolichka(Forms)
     # print(Forms.new_answers())
     bot = telebot.TeleBot(botlogic.token)
-    # , parse_mode= 'Markdown'
     def function_to_run():
         print('function tu run')
         Ids_to_spam = pickle.load(open('Chat_ids.pickle', 'rb'))
         for i in Ids_to_spam:
             try:
-                bot.send_message(i, botlogic.spam())
-
-            except Exception as e:
-                print('ERROR LOH ALARM')
+                spam = botlogic.spam()
+                if spam != -1:
+                    bot.send_message(i, spam, parse_mode= 'Markdown')
+                else:
+                    print('nospam')
+                    break
+            except ApiTelegramException as e:
+                print(e.result)
                 print(e)
-                # ids = pickle.load(open('Chat_ids.pickle', 'rb'))
-                # ids.remove(i)
-                # pickle.dump(set(ids), open('Chat_ids.pickle', 'wb'))
-                #
-                # ids = pickle.load(open('ErrorUsers.pickle', 'rb'))
-                # ids.add(i)
-                # pickle.dump(ids, open('ErrorUsers.pickle', 'wb'))
+                print(e.error_code)
+                if e.error_code == 403:
+                    print('ERROR LOH ALARM')
+                    ids = pickle.load(open('Chat_ids.pickle', 'rb'))
+                    ids.remove(i)
+                    pickle.dump(set(ids), open('Chat_ids.pickle', 'wb'))
+
+                    ids = pickle.load(open('ErrorUsers.pickle', 'rb'))
+                    ids.add(i)
+                    pickle.dump(ids, open('ErrorUsers.pickle', 'wb'))
+            except Exception as e:
+                print('code govno nerabotaet')
+                print(e)
 
     # обработка сообщений
     @bot.message_handler(commands=['start'])
@@ -105,14 +117,17 @@ def run(Forms):
     def unalarm(message):
         print('unalarm')
         ids = pickle.load(open('Chat_ids.pickle', 'rb'))
-        ids.remove(message.chat.id)
-        pickle.dump(set(ids), open('Chat_ids.pickle', 'wb'))
+        if message.chat.id not in ids:
+            bot.send_message(message.chat.id, 'Вы не подписаны на рассылку')
+        else:
+            ids.remove(message.chat.id)
+            pickle.dump(set(ids), open('Chat_ids.pickle', 'wb'))
+            bot.send_message(message.chat.id, 'Вы отписались от рассылки')
 
 
     # Бесконечный цикл
     print('bebi')
     schedule.every(3).seconds.do(function_to_run)
     Thread(target=schedule_checker).start()
-    print('infpol')
     bot.infinity_polling()
     print('bot end')
